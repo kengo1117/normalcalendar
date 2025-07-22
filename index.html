@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>編集・削除機能付きカレンダー</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin: 1rem 0;
+    }
+    #calendar {
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 0 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      width: 14.28%;
+      border: 1px solid #ccc;
+      vertical-align: top;
+      padding: 4px;
+      font-size: 0.75rem;
+      position: relative;
+      height: 100px;
+      box-sizing: border-box;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    td {
+      cursor: pointer;
+    }
+    td.today {
+      background-color: #ffeeba;
+    }
+    .event {
+      font-size: 0.7rem;
+      text-align: left;
+      margin-top: 4px;
+      background: #e0f7fa;
+      border-radius: 4px;
+      padding: 2px 4px;
+      word-break: break-word;
+    }
+    .event:hover {
+      background-color: #b2ebf2;
+    }
+    #controls {
+      margin: 10px;
+    }
+    button {
+      padding: 5px 10px;
+      font-size: 1rem;
+      margin: 5px;
+      border-radius: 5px;
+      border: 1px solid #888;
+      background-color: #fff;
+    }
+    @media (max-width: 600px) {
+      th, td {
+        font-size: 0.7rem;
+        height: 80px;
+      }
+      .event {
+        font-size: 0.65rem;
+      }
+      h1 {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1 id="monthYear"></h1>
+  <div id="controls">
+    <button onclick="prevMonth()">← 前の月</button>
+    <button onclick="nextMonth()">次の月 →</button>
+  </div>
+  <div id="calendar"></div>
+
+  <script>
+    const calendarElement = document.getElementById("calendar");
+    const monthYear = document.getElementById("monthYear");
+    let current = new Date();
+    const storageKey = "calendarEventsMulti";
+
+    function loadEvents() {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : {};
+    }
+
+    function saveEvents(events) {
+      localStorage.setItem(storageKey, JSON.stringify(events));
+    }
+
+    function getDateKey(year, month, day) {
+      return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+
+    function generateCalendar(year, month) {
+      const events = loadEvents();
+      const today = new Date();
+      const date = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const startDay = date.getDay();
+
+      let html = "<table><tr>";
+      const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
+      weekDays.forEach(day => html += `<th>${day}</th>`);
+      html += "</tr><tr>";
+
+      for (let i = 0; i < startDay; i++) html += "<td></td>";
+
+      for (let day = 1; day <= lastDay; day++) {
+        const key = getDateKey(year, month, day);
+        const eventList = events[key] || [];
+        const currentDate = new Date(year, month, day);
+        const isToday = currentDate.toDateString() === today.toDateString();
+
+        html += `<td class="${isToday ? 'today' : ''}">
+          <div onclick="addEvent(${year}, ${month}, ${day})">${day}</div>
+          ${eventList.map((e, i) => 
+            `<div class="event" onclick="editEvent('${key}', ${i}, event)">${e}</div>`
+          ).join("")}
+        </td>`;
+
+        if ((day + startDay) % 7 === 0) html += "</tr><tr>";
+      }
+
+      html += "</tr></table>";
+      calendarElement.innerHTML = html;
+      monthYear.textContent = `${year}年 ${month + 1}月`;
+    }
+
+    function addEvent(year, month, day) {
+      const key = getDateKey(year, month, day);
+      const events = loadEvents();
+      const input = prompt(`${year}年${month + 1}月${day}日の予定を入力:`);
+      if (input && input.trim() !== "") {
+        if (!events[key]) events[key] = [];
+        events[key].push(input.trim());
+        saveEvents(events);
+        generateCalendar(current.getFullYear(), current.getMonth());
+      }
+    }
+
+    function editEvent(dateKey, index, e) {
+      e.stopPropagation(); // セルクリックを防ぐ
+      const events = loadEvents();
+      const currentText = events[dateKey][index];
+      const action = prompt(`編集・削除する場合:\n- そのまま修正で「編集」\n- 空欄で保存すると「削除」\n\n現在の予定:\n${currentText}`, currentText);
+
+      if (action === null) return; // キャンセル
+      if (action.trim() === "") {
+        events[dateKey].splice(index, 1);
+        if (events[dateKey].length === 0) delete events[dateKey];
+      } else {
+        events[dateKey][index] = action.trim();
+      }
+
+      saveEvents(events);
+      generateCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    function prevMonth() {
+      current.setMonth(current.getMonth() - 1);
+      generateCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    function nextMonth() {
+      current.setMonth(current.getMonth() + 1);
+      generateCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    generateCalendar(current.getFullYear(), current.getMonth());
+  </script>
+
+</body>
+</html>
