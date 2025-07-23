@@ -1,97 +1,94 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>繰り返し予定付きカレンダー</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>勉強カレンダー</title>
   <style>
     body {
       font-family: sans-serif;
       margin: 0;
       padding: 0;
       text-align: center;
+      background: #f8f8f8;
     }
     h1 {
-      font-size: 1.5rem;
-      margin: 1rem 0;
-    }
-    #controls {
-      margin: 10px;
-    }
-    button, input[type="text"] {
-      padding: 6px 10px;
-      font-size: 1rem;
-      margin: 5px;
-      border-radius: 5px;
-      border: 1px solid #888;
+      margin: 20px;
     }
     #calendar {
-      width: 100%;
-      max-width: 700px;
+      width: 95%;
+      max-width: 800px;
       margin: auto;
-      padding: 0 5px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
     }
     th, td {
-      width: 14.28%;
+      width: 14.2%;
+      height: 80px;
       border: 1px solid #ccc;
       vertical-align: top;
-      padding: 4px;
-      font-size: 0.75rem;
-      height: 100px;
       position: relative;
-      box-sizing: border-box;
     }
     th {
-      background-color: #f0f0f0;
-    }
-    td {
-      cursor: pointer;
+      background: #eee;
     }
     td.today {
-      background-color: #ffeeba;
-    }
-    td.sunday {
-      background-color: #ffe5e5;
+      background: #fff8c6;
     }
     td.saturday {
-      background-color: #e5f0ff;
+      background-color: #e0f7fa;
+    }
+    td.sunday {
+      background-color: #fde0dc;
     }
     .event {
-      font-size: 0.7rem;
-      background: #e0f7fa;
-      margin-top: 4px;
-      padding: 2px 4px;
+      background: #dcedc8;
+      margin: 2px;
+      padding: 2px;
       border-radius: 4px;
-      word-break: break-word;
-      text-align: left;
+      font-size: 0.8em;
+      cursor: pointer;
     }
-    .recurring {
-      background-color: #dcedc8;
+    .event.important {
+      background: #ffccbc;
+      font-weight: bold;
     }
-    #instructions {
+    #controls {
+      margin-bottom: 10px;
+    }
+    #searchInput {
+      padding: 5px;
+      width: 200px;
+      margin: 10px auto;
+    }
+    .instructions {
       position: fixed;
-      right: 10px;
       bottom: 10px;
-      font-size: 0.7rem;
-      background-color: #f9f9f9;
-      border: 1px solid #ccc;
-      padding: 8px;
-      border-radius: 6px;
-      max-width: 200px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      right: 10px;
+      font-size: 0.8em;
+      color: #666;
     }
-    @media (max-width: 600px) {
-      th, td {
-        font-size: 0.7rem;
-        height: 80px;
-      }
-      .event {
-        font-size: 0.65rem;
-      }
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ccc;
+      padding: 20px;
+      z-index: 999;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.3);
+      z-index: 998;
     }
   </style>
 </head>
@@ -100,146 +97,134 @@
   <div id="controls">
     <button onclick="prevMonth()">← 前の月</button>
     <button onclick="nextMonth()">次の月 →</button><br>
-    <input type="text" id="searchBox" placeholder="予定を検索..." oninput="renderCalendar()">
-    <button onclick="clearSearch()">検索クリア</button>
+    <input type="text" id="searchInput" placeholder="予定を検索">
   </div>
   <div id="calendar"></div>
-  <div id="instructions">
-    📌 <strong>操作説明</strong><br>
-    ・日付クリック → 予定追加<br>
-    ・予定クリック → 編集 / 削除<br>
-    ・検索欄 → 予定を絞り込み表示<br>
-    ・曜日チェック → 繰り返し予定
+  <div class="instructions">
+    📅 日付クリックで予定追加・🖱 予定クリックで編集・削除・<br>
+    🔁 繰り返し予定は曜日選択・日単位スキップも可能<br>
+    ⭐ タイトルに「!」を入れると重要扱い（色付け）
   </div>
   <script>
-    const calendar = document.getElementById("calendar");
+    const calendarElement = document.getElementById("calendar");
     const monthYear = document.getElementById("monthYear");
-    const searchBox = document.getElementById("searchBox");
+    const searchInput = document.getElementById("searchInput");
     let current = new Date();
-    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 
-    let events = JSON.parse(localStorage.getItem("events")) || {};
-    let recurring = JSON.parse(localStorage.getItem("recurring")) || [];
+    const eventData = JSON.parse(localStorage.getItem("events") || "[]");
+    const recurring = JSON.parse(localStorage.getItem("recurring") || "[]");
+    const skips = JSON.parse(localStorage.getItem("skips") || "{}");
 
-    function saveData() {
-      localStorage.setItem("events", JSON.stringify(events));
+    function save() {
+      localStorage.setItem("events", JSON.stringify(eventData));
       localStorage.setItem("recurring", JSON.stringify(recurring));
+      localStorage.setItem("skips", JSON.stringify(skips));
     }
 
-    function clearSearch() {
-      searchBox.value = "";
-      renderCalendar();
+    function isImportant(title) {
+      return title.includes("!");
     }
 
-    function renderCalendar() {
-      const year = current.getFullYear();
-      const month = current.getMonth();
-      const first = new Date(year, month, 1);
-      const last = new Date(year, month + 1, 0);
-      const startDay = first.getDay();
-      const search = searchBox.value.trim().toLowerCase();
+    function renderCalendar(year, month) {
+      calendarElement.innerHTML = "";
+      const date = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const startDay = date.getDay();
+      const today = new Date();
 
-      let html = "<table><tr>";
-      weekdays.forEach(day => html += `<th>${day}</th>`);
-      html += "</tr><tr>";
+      let table = "<table><tr>";
+      const weekDays = ["日","月","火","水","木","金","土"];
+      weekDays.forEach(d => table += `<th>${d}</th>`);
+      table += "</tr><tr>";
 
-      let dayCount = 0;
-      for (let i = 0; i < startDay; i++) {
-        html += "<td></td>";
-        dayCount++;
-      }
+      for (let i = 0; i < startDay; i++) table += "<td></td>";
 
-      for (let day = 1; day <= last.getDate(); day++) {
-        const dateKey = `${year}-${String(month+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const date = new Date(year, month, day);
-        const dayOfWeek = date.getDay();
+      for (let day = 1; day <= lastDay; day++) {
+        const cellDate = new Date(year, month, day);
+        const dateStr = cellDate.toISOString().split("T")[0];
+        const isToday = cellDate.toDateString() === today.toDateString();
+        const dow = cellDate.getDay();
+        const tdClass = `${isToday ? "today" : ""} ${dow === 0 ? "sunday" : dow === 6 ? "saturday" : ""}`;
 
-        let cellClass = "";
-        if (date.toDateString() === new Date().toDateString()) cellClass = "today";
-        if (dayOfWeek === 0) cellClass += " sunday";
-        if (dayOfWeek === 6) cellClass += " saturday";
+        table += `<td class="${tdClass}" onclick="addEventPrompt('${dateStr}')"><div>${day}</div>`;
 
-        html += `<td class="${cellClass}" onclick="addEventPrompt('${dateKey}', ${dayOfWeek})">`;
-        html += `<div>${day}</div>`;
+        const filtered = eventData.filter(e => e.date === dateStr && (!searchInput.value || e.title.includes(searchInput.value)));
+        filtered.forEach((e, i) => {
+          const importanceClass = isImportant(e.title) ? "important" : "";
+          table += `<div class="event ${importanceClass}" onclick="event.stopPropagation(); editEvent(${i})">${e.title}</div>`;
+        });
 
-        (events[dateKey] || []).forEach((e, i) => {
-          if (!search || e.toLowerCase().includes(search)) {
-            html += `<div class='event' onclick="editEvent('${dateKey}', ${i}, event)">${e}</div>`;
+        recurring.forEach(r => {
+          if (r.days.includes(dow) && (!skips[dateStr] || !skips[dateStr].includes(r.id)) && (!searchInput.value || r.title.includes(searchInput.value))) {
+            const importanceClass = isImportant(r.title) ? "important" : "";
+            table += `<div class="event ${importanceClass}" onclick="event.stopPropagation(); editRecurring('${r.id}', '${dateStr}')">${r.title}</div>`;
           }
         });
 
-        recurring.forEach((rec, i) => {
-          if (rec.days.includes(dayOfWeek)) {
-            if (!search || rec.title.toLowerCase().includes(search)) {
-              html += `<div class='event recurring' onclick="editRecurring(${i}, event)">${rec.title}</div>`;
-            }
-          }
-        });
-
-        html += "</td>";
-        dayCount++;
-        if (dayCount % 7 === 0) html += "</tr><tr>";
+        table += "</td>";
+        if ((day + startDay) % 7 === 0) table += "</tr><tr>";
       }
-
-      html += "</tr></table>";
-      calendar.innerHTML = html;
-      monthYear.textContent = `${year}年 ${month+1}月`;
-    }
-
-    function addEventPrompt(dateKey, dayOfWeek) {
-      const title = prompt("予定を入力:");
-      if (!title) return;
-      const repeat = confirm("この予定を毎週同じ曜日に繰り返しますか？");
-      if (repeat) {
-        recurring.push({ title, days: [dayOfWeek] });
-      } else {
-        if (!events[dateKey]) events[dateKey] = [];
-        events[dateKey].push(title);
-      }
-      saveData();
-      renderCalendar();
-    }
-
-    function editEvent(dateKey, index, e) {
-      e.stopPropagation();
-      const currentText = events[dateKey][index];
-      const newText = prompt("予定を編集（空欄で削除）:", currentText);
-      if (newText === null) return;
-      if (newText.trim() === "") {
-        events[dateKey].splice(index, 1);
-        if (events[dateKey].length === 0) delete events[dateKey];
-      } else {
-        events[dateKey][index] = newText.trim();
-      }
-      saveData();
-      renderCalendar();
-    }
-
-    function editRecurring(index, e) {
-      e.stopPropagation();
-      const currentText = recurring[index].title;
-      const newText = prompt("繰り返し予定を編集（空欄で削除）:", currentText);
-      if (newText === null) return;
-      if (newText.trim() === "") {
-        recurring.splice(index, 1);
-      } else {
-        recurring[index].title = newText.trim();
-      }
-      saveData();
-      renderCalendar();
+      table += "</tr></table>";
+      calendarElement.innerHTML = table;
+      monthYear.textContent = `${year}年 ${month + 1}月`;
     }
 
     function prevMonth() {
       current.setMonth(current.getMonth() - 1);
-      renderCalendar();
+      renderCalendar(current.getFullYear(), current.getMonth());
     }
 
     function nextMonth() {
       current.setMonth(current.getMonth() + 1);
-      renderCalendar();
+      renderCalendar(current.getFullYear(), current.getMonth());
     }
 
-    renderCalendar();
+    function addEventPrompt(date) {
+      const title = prompt("予定を入力してください：（! をつけると重要表示）");
+      if (!title) return;
+      if (confirm("この予定を毎週繰り返しますか？")) {
+        const days = prompt("繰り返したい曜日をカンマ区切りで入力（日=0〜土=6）\n例: 月水金 → 1,3,5");
+        if (!days) return;
+        const id = Date.now().toString();
+        recurring.push({ id, title, days: days.split(',').map(x => parseInt(x)) });
+      } else {
+        eventData.push({ title, date });
+      }
+      save();
+      renderCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    function editEvent(index) {
+      const newTitle = prompt("予定を編集：", eventData[index].title);
+      if (newTitle === null) return;
+      if (newTitle === "") eventData.splice(index, 1);
+      else eventData[index].title = newTitle;
+      save();
+      renderCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    function editRecurring(id, date) {
+      const r = recurring.find(r => r.id === id);
+      const choice = prompt(`編集または削除：\n1: 編集, 2: 削除, 3: この日だけ非表示`, "1");
+      if (choice === "2") {
+        const idx = recurring.findIndex(r => r.id === id);
+        recurring.splice(idx, 1);
+      } else if (choice === "3") {
+        if (!skips[date]) skips[date] = [];
+        skips[date].push(id);
+      } else if (choice === "1") {
+        const newTitle = prompt("新しい予定名：", r.title);
+        if (newTitle) r.title = newTitle;
+      }
+      save();
+      renderCalendar(current.getFullYear(), current.getMonth());
+    }
+
+    searchInput.addEventListener("input", () => {
+      renderCalendar(current.getFullYear(), current.getMonth());
+    });
+
+    renderCalendar(current.getFullYear(), current.getMonth());
   </script>
 </body>
 </html>
